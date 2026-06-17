@@ -1,0 +1,32 @@
+# Rust
+/target/
+Cargo.lock
+**/*.rs.bk
+
+# Data & Models
+/data/
+/models/
+*.db
+*.index
+
+# Environment
+.env
+.env.local
+.env.development
+.env.production
+
+# Docker
+docker-volumes/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Plans
+plans/

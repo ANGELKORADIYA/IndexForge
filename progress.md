@@ -1,0 +1,5 @@
+Task 1: Workspace Scaffolding: complete (commits a41723b..HEAD, review clean)
+Task 2: Database Initialization: complete (commits 49bd269..HEAD, review clean)
+Task 3: Ingestion Pipeline (Text): complete (commits 027481d..HEAD, review clean)
+Task 4: Search & CLI (Phase 1 Final): complete (commits d055dd2..HEAD, review clean)
+Task 5: Infrastructure & Docker Setup: complete (Setup Guide, Dockerfile, Compose, Scripts)

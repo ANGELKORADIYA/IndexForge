@@ -1,0 +1,9 @@
+target/
+data/
+models/
+.git/
+.env
+**/*.rs.bk
+docker-volumes/
+node_modules/
+dist/

@@ -1,0 +1,62 @@
+services:
+  db:
+    image: ankane/pgvector:latest
+    container_name: ms-db
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-memory_search}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-memory_search}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  app-dev:
+    profiles: ["dev"]
+    build:
+      context: .
+      target: builder
+    container_name: ms-app-dev
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-memory_search}
+      TANTIVY_PATH: /app/data/tantivy-index
+      MODEL_PATH: /app/models
+    volumes:
+      - .:/usr/src/app
+      - cargo-cache:/usr/local/cargo/registry
+      - target-cache:/usr/src/app/target
+      - ./data:/app/data
+      - ./models:/app/models
+    command: cargo run --package ms-cli -- --help
+
+  app-prod:
+    profiles: ["prod"]
+    build:
+      context: .
+    container_name: ms-app-prod
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-memory_search}
+      TANTIVY_PATH: /app/data/tantivy-index
+      MODEL_PATH: /app/models
+    volumes:
+      - ./data:/app/data
+      - ./models:/app/models
+    ports:
+      - "8080:8080"
+    command: ["ms-cli", "--help"]
+
+volumes:
+  pgdata:
+  cargo-cache:
+  target-cache:
