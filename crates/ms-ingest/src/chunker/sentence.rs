@@ -12,11 +12,14 @@ impl SentenceChunker {
         let mut current = String::new();
 
         for sentence in &sentences {
-            if current.len() + sentence.len() > self.chunk_size && !current.is_empty() {
+            let current_char_count = current.chars().count();
+            let sentence_char_count = sentence.chars().count();
+
+            if current_char_count + sentence_char_count > self.chunk_size && !current.is_empty() {
                 chunks.push(current.clone());
                 // keep overlap: take last N chars
-                let overlap_start = current.len().saturating_sub(self.overlap);
-                current = current[overlap_start..].to_string();
+                let overlap_start = current_char_count.saturating_sub(self.overlap);
+                current = current.chars().skip(overlap_start).collect();
             }
             current.push_str(sentence);
         }
@@ -42,5 +45,21 @@ mod tests {
         assert_eq!(chunks[0], "This is sentence one. ");
         assert_eq!(chunks[1], "one. This is sentence two. ");
         assert_eq!(chunks[2], "two. And three.");
+    }
+
+    #[test]
+    fn test_sentence_chunker_multibyte() {
+        let chunker = SentenceChunker {
+            chunk_size: 15,
+            overlap: 4,
+        };
+        // Each emoji is usually multi-byte. 
+        let text = "¡Hola, mundo! ¿Cómo estás? Bien. 😊👍";
+        let chunks = chunker.chunk(text);
+        
+        assert_eq!(chunks.len(), 3);
+        assert_eq!(chunks[0], "¡Hola, mundo! ");
+        assert_eq!(chunks[1], "do! ¿Cómo estás? ");
+        assert_eq!(chunks[2], "ás? Bien. ");
     }
 }
