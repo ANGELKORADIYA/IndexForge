@@ -5,6 +5,7 @@ use tantivy::{Index, IndexReader};
 
 pub struct BM25Result {
     pub id: String,
+    pub text: String,
     pub score: f32,
 }
 
@@ -47,17 +48,24 @@ impl BM25Index {
         
         let mut results = Vec::new();
         let id_field = self.schema.get_field("id").unwrap();
+        let text_field = self.schema.get_field("text").unwrap();
         
         for (score, doc_address) in top_docs {
             let doc = searcher.doc(doc_address)?;
-            if let Some(id_val) = doc.get_first(id_field) {
-                if let Some(id_str) = id_val.as_text() {
-                    results.push(BM25Result {
-                        id: id_str.to_string(),
-                        score,
-                    });
-                }
-            }
+            let id = doc.get_first(id_field)
+                .and_then(|v| v.as_text())
+                .unwrap_or_default()
+                .to_string();
+            let text = doc.get_first(text_field)
+                .and_then(|v| v.as_text())
+                .unwrap_or_default()
+                .to_string();
+            
+            results.push(BM25Result {
+                id,
+                text,
+                score,
+            });
         }
         Ok(results)
     }

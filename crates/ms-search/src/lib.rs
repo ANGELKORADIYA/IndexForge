@@ -1,14 +1,20 @@
-pub fn add(left: u64, right: u64) -> u64 {
-    left + right
-}
+use ms_core::{ScoredCandidate, SearchArm};
+use ms_index::bm25::BM25Index;
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
+pub async fn search_bm25(
+    query: &str,
+    mode: &str,
+    top_k: usize,
+    index: &BM25Index,
+) -> Vec<ScoredCandidate> {
+    index.search(query, mode, top_k)
+        .unwrap_or_default()
+        .into_iter()
+        .map(|r| ScoredCandidate {
+            chunk_id: r.id,
+            text: r.text,
+            score: r.score as f64,
+            arm: SearchArm::BM25,
+        })
+        .collect()
 }

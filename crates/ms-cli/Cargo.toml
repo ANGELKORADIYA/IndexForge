@@ -4,3 +4,13 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+ms-core = { path = "../ms-core" }
+ms-ingest = { path = "../ms-ingest" }
+ms-index = { path = "../ms-index" }
+ms-search = { path = "../ms-search" }
+clap = { workspace = true }
+tokio = { workspace = true }
+uuid = { workspace = true }
+anyhow = { workspace = true }
+tantivy = { workspace = true }
+walkdir = "2"
