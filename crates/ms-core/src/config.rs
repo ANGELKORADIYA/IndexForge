@@ -9,8 +9,12 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         Self {
-            tantivy_path: "./data/tantivy-index".to_string(),
-            database_url: "postgresql://localhost/memory_search".to_string(),
+            tantivy_path: std::env::var("TANTIVY_PATH")
+                .unwrap_or_else(|_| "./data/tantivy-index".to_string()),
+            database_url: std::env::var("DATABASE_URL")
+                .unwrap_or_else(|_| {
+                    "postgres://postgres:postgres@127.0.0.1:5432/memory_search".to_string()
+                }),
         }
     }
 }
