@@ -21,6 +21,13 @@ interface SearchResponse {
   rag_answer?: RagAnswer;
 }
 
+interface Stats {
+  total_documents: number;
+  total_chunks: number;
+  modes: Record<string, number>;
+  arms: Record<string, string>;
+}
+
 function App() {
   const [query, setQuery] = useState('');
   const [mode, setMode] = useState('default');
@@ -32,6 +39,24 @@ function App() {
   const [ragAnswer, setRagAnswer] = useState<RagAnswer | undefined>(undefined);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const [stats, setStats] = useState<Stats | null>(null);
+  const [showStats, setShowStats] = useState(false);
+  
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploadMode, setUploadMode] = useState('default');
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadMsg, setUploadMsg] = useState('');
+
+  const fetchStats = async () => {
+    try {
+      const res = await fetch('http://localhost:8080/api/stats');
+      const data = await res.json();
+      setStats(data);
+    } catch (e) {
+      console.error('Failed to fetch stats');
+    }
+  };
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -66,14 +91,89 @@ function App() {
     }
   };
 
+  const handleUpload = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!uploadFile) return;
+
+    setIsUploading(true);
+    setUploadMsg('');
+    const formData = new FormData();
+    formData.append('file', uploadFile);
+    formData.append('mode', uploadMode);
+
+    try {
+      const res = await fetch('http://localhost:8080/api/upload', {
+        method: 'POST',
+        body: formData,
+      });
+      const data = await res.json();
+      setUploadMsg(data.message || 'Upload success');
+      fetchStats();
+    } catch (err: any) {
+      setUploadMsg('Upload failed');
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
   return (
     <div className="app-container">
       <header className="app-header">
         <h1>MemorySearch 🔍</h1>
         <p>A fast, local-first search engine with 3-arm retrieval and RAG capabilities.</p>
+        <div className="header-actions">
+          <button onClick={() => { setShowStats(!showStats); if (!showStats) fetchStats(); }}>
+            📊 {showStats ? 'Hide Stats' : 'View DB Stats & Upload'}
+          </button>
+        </div>
       </header>
 
       <main className="main-content">
+        {showStats && (
+          <div className="stats-panel fade-in">
+            <div className="stats-grid">
+              <div className="stat-card">
+                <h3>Global Index</h3>
+                {stats ? (
+                  <>
+                    <p><strong>Documents:</strong> {stats.total_documents}</p>
+                    <p><strong>Total Chunks:</strong> {stats.total_chunks}</p>
+                  </>
+                ) : <p>Loading...</p>}
+              </div>
+              <div className="stat-card">
+                <h3>Indexed Modes</h3>
+                {stats && Object.entries(stats.modes).map(([m, c]) => (
+                  <p key={m}><strong>{m}:</strong> {c} chunks</p>
+                ))}
+              </div>
+              <div className="stat-card" style={{ gridColumn: 'span 2' }}>
+                <h3>Search Arms Health</h3>
+                {stats && Object.entries(stats.arms).map(([arm, info]) => (
+                  <p key={arm}><strong>{arm.toUpperCase()}:</strong> {info}</p>
+                ))}
+              </div>
+            </div>
+
+            <form className="upload-form" onSubmit={handleUpload}>
+              <h3>Upload & Index New File</h3>
+              <div className="upload-row">
+                <input type="file" onChange={(e) => setUploadFile(e.target.files?.[0] || null)} />
+                <select value={uploadMode} onChange={(e) => setUploadMode(e.target.value)}>
+                  <option value="default">Default</option>
+                  <option value="notes">Notes</option>
+                  <option value="codebase">Codebase</option>
+                  <option value="wikipedia">Wikipedia</option>
+                </select>
+                <button type="submit" disabled={isUploading || !uploadFile}>
+                  {isUploading ? 'Uploading...' : 'Upload File'}
+                </button>
+              </div>
+              {uploadMsg && <p className="upload-msg">{uploadMsg}</p>}
+            </form>
+          </div>
+        )}
+
         <form className="search-form" onSubmit={handleSearch}>
           <div className="search-bar-wrapper">
             <input

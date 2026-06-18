@@ -2,10 +2,8 @@ use super::ExtractedDoc;
 use std::path::Path;
 
 pub fn load(path: &Path) -> anyhow::Result<Vec<ExtractedDoc>> {
-    let bytes = std::fs::read(path)?;
-    
-    // pdf_extract::extract_text can extract plain text from PDFs.
-    let text = pdf_extract::extract_text(&bytes)
+    // pdf_extract::extract_text takes a path, not bytes.
+    let text = pdf_extract::extract_text(path)
         .unwrap_or_else(|_| String::new());
 
     if text.trim().is_empty() {

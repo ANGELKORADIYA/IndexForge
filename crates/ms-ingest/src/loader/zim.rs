@@ -3,14 +3,7 @@ use std::path::Path;
 use zim::Zim;
 
 pub fn load(path: &Path) -> anyhow::Result<Vec<ExtractedDoc>> {
-    // Zim parsing can be heavy; we will extract the text from the html inside the articles.
-    // Note: To avoid running out of memory, a real production system might stream this
-    // directly into the index. For simplicity, we'll collect up to a certain limit or 
-    // yield them. Wait, if a ZIM file is 4GB, returning a Vec<ExtractedDoc> will OOM!
-    // Since our `load_file` signature returns `Vec<ExtractedDoc>`, let's implement a safeguard limit.
-    // A better approach would be to refactor `load_file` to return an Iterator, but for now:
-    
-    let zim_file = Zim::new(path)?;
+    let zim_file = Zim::new(path).map_err(|e| anyhow::anyhow!("ZIM Error: {:?}", e))?;
     let mut docs = Vec::new();
 
     // Iterate through all articles.
@@ -20,16 +13,22 @@ pub fn load(path: &Path) -> anyhow::Result<Vec<ExtractedDoc>> {
             break;
         }
 
-        // We only care about content (usually text/html)
-        if article.mime_type.as_deref() != Some("text/html") {
-            continue;
+        // Check if MIME type is text/html
+        match article.mime_type {
+            zim::MimeType::Type(ref t) if t == "text/html" => {},
+            _ => continue,
         }
 
-        let content = article.get_content(&zim_file).unwrap_or_default();
+        let content = match article.target {
+            Some(zim::Target::Cluster(cluster_idx, blob_idx)) => {
+                let cluster = zim_file.get_cluster(cluster_idx).map_err(|e| anyhow::anyhow!("{:?}", e))?;
+                let blob = cluster.get_blob(blob_idx).map_err(|e| anyhow::anyhow!("{:?}", e))?;
+                blob.to_vec()
+            }
+            _ => continue,
+        };
+
         let html_string = String::from_utf8_lossy(&content).to_string();
-        
-        // Strip HTML (extremely rudimentary for speed and simplicity)
-        // In a real system, we might use a proper HTML parser like tl or scraper.
         let text = strip_html(&html_string);
 
         if !text.trim().is_empty() {
