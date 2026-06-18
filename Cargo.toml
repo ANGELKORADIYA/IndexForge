@@ -8,6 +8,7 @@ members = [
     "crates/ms-rag",
     "crates/ms-server",
     "crates/ms-cli",
+    "crates/ms-python",
 ]
 resolver = "2"
 

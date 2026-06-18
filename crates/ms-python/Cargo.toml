@@ -1,0 +1,25 @@
+[package]
+name = "ms-python"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "memory_search"
+crate-type = ["cdylib"]
+
+[dependencies]
+pyo3 = { version = "0.20", features = ["extension-module", "anyhow"] }
+ms-core = { path = "../ms-core" }
+ms-index = { path = "../ms-index" }
+ms-search = { path = "../ms-search" }
+ms-ingest = { path = "../ms-ingest" }
+ms-rerank = { path = "../ms-rerank" }
+ms-rag = { path = "../ms-rag" }
+tokio = { workspace = true }
+sqlx = { workspace = true }
+tantivy = { workspace = true }
+uuid = { workspace = true }
+pgvector = "0.3"
+anyhow = "1.0"
+serde_json = { workspace = true }
+walkdir = "2.3"

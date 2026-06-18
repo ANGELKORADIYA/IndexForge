@@ -42,6 +42,6 @@ Task 2: RAG Layer with Ollama/OpenRouter/Gemini (ms-rag): complete
 Task 1: REST API via Axum (ms-server): complete
 Task 2: React Web UI (ui/): complete
 
-## Phase 5 (In Progress)
+## Phase 5 (Complete)
 Task 1: Advanced Loaders (Wikipedia ZIM/XML, PDF, DOCX, CSV, JSON): complete
-Task 2: Python Bindings (PyO3): pending
+Task 2: Python Bindings (PyO3): complete

@@ -255,9 +255,39 @@ crates/
   ms-rag/        # RAG layer / Ollama (Phase 3)
   ms-server/     # Axum REST API (Phase 4)
   ms-cli/        # CLI: index, search, search-all
+  ms-python/     # Python Library bindings (PyO3)
+ui/              # React + Vite frontend UI
 data/            # Tantivy index files (gitignored)
 migrations/      # SQL schema migrations
 plans/           # Per-phase task briefs, reports, reviews
 models/          # Offline ML models (gitignored)
 .env.example     # Environment variable template
+```
+
+---
+
+## 9. Python Library (`memory_search`)
+
+We expose a natively compiled Python library powered by `PyO3` and `maturin`.
+
+### Installation
+```bash
+cd crates/ms-python
+python -m venv .venv
+# source .venv/bin/activate  (Linux/Mac)
+.\.venv\Scripts\activate   # (Windows)
+pip install maturin
+maturin develop --release
+```
+
+### Usage
+```python
+import memory_search
+import json
+
+ms = memory_search.MemorySearch()
+ms.index("./data", mode="wikipedia")
+
+results = ms.search("How does vector search work?", top_k=3, rerank=True)
+print(json.loads(results))
 ```
