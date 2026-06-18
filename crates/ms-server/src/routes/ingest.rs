@@ -50,59 +50,63 @@ pub async fn ingest_handler(
 
     for entry in WalkDir::new(&path).into_iter().filter_map(|e| e.ok()) {
         if !entry.file_type().is_file() { continue; }
-        let Ok(content) = std::fs::read_to_string(entry.path()) else { continue };
-        if content.trim().is_empty() { continue; }
+        
+        let extracted_docs = match ms_ingest::loader::load_file(entry.path()) {
+            Ok(docs) => docs,
+            Err(_) => continue,
+        };
 
-        let doc_id = Uuid::new_v4();
-        let source_path = entry.path().display().to_string();
-
-        sqlx::query(
-            "INSERT INTO documents (id, source_path, mode) VALUES ($1, $2, $3)",
-        )
-        .bind(doc_id)
-        .bind(&source_path)
-        .bind(&payload.mode)
-        .execute(&state.pool)
-        .await
-        .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, format!("DB error: {}", e)))?;
-
-        let chunks = chunker.chunk(&content);
-        if chunks.is_empty() { continue; }
-
-        let embeddings = embedder.embed_batch(&chunks).map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, format!("Embed error: {}", e)))?;
-
-        for (i, (chunk_text, embedding)) in
-            chunks.into_iter().zip(embeddings.into_iter()).enumerate()
-        {
-            let chunk_id = Uuid::new_v4();
-
-            // 1. Tantivy BM25
-            index_writer.add_document(doc!(
-                id_field     => chunk_id.to_string(),
-                text_field   => chunk_text.clone(),
-                mode_field   => payload.mode.clone(),
-                source_field => source_path.clone(),
-                ci_field     => i as u64
-            )).map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, format!("Tantivy add_doc error: {}", e)))?;
-
-            // 2. pgvector
+        for extracted in extracted_docs {
+            let doc_id = Uuid::new_v4();
+            
             sqlx::query(
-                "INSERT INTO chunks (id, doc_id, text, embedding, chunk_index, mode) \
-                 VALUES ($1, $2, $3, $4, $5, $6)",
+                "INSERT INTO documents (id, source_path, mode) VALUES ($1, $2, $3)",
             )
-            .bind(chunk_id)
             .bind(doc_id)
-            .bind(&chunk_text)
-            .bind(Vector::from(embedding))
-            .bind(i as i32)
+            .bind(&extracted.source)
             .bind(&payload.mode)
             .execute(&state.pool)
             .await
-            .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, format!("DB chunk error: {}", e)))?;
+            .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, format!("DB error: {}", e)))?;
 
-            total_chunks += 1;
+            let chunks = chunker.chunk(&extracted.text);
+            if chunks.is_empty() { continue; }
+
+            let embeddings = embedder.embed_batch(&chunks).map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, format!("Embed error: {}", e)))?;
+
+            for (i, (chunk_text, embedding)) in
+                chunks.into_iter().zip(embeddings.into_iter()).enumerate()
+            {
+                let chunk_id = Uuid::new_v4();
+
+                // 1. Tantivy BM25
+                index_writer.add_document(doc!(
+                    id_field     => chunk_id.to_string(),
+                    text_field   => chunk_text.clone(),
+                    mode_field   => payload.mode.clone(),
+                    source_field => extracted.source.clone(),
+                    ci_field     => i as u64
+                )).map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, format!("Tantivy add_doc error: {}", e)))?;
+
+                // 2. pgvector
+                sqlx::query(
+                    "INSERT INTO chunks (id, doc_id, text, embedding, chunk_index, mode) \
+                     VALUES ($1, $2, $3, $4, $5, $6)",
+                )
+                .bind(chunk_id)
+                .bind(doc_id)
+                .bind(&chunk_text)
+                .bind(Vector::from(embedding))
+                .bind(i as i32)
+                .bind(&payload.mode)
+                .execute(&state.pool)
+                .await
+                .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, format!("DB chunk error: {}", e)))?;
+
+                total_chunks += 1;
+            }
+            total_docs += 1;
         }
-        total_docs += 1;
     }
 
     index_writer.commit().map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, format!("Commit error: {}", e)))?;

@@ -65,7 +65,10 @@ This file serves as a central repository for cross-module decisions, architectur
 - Concurrent model state sharing using `tokio::sync::Mutex` for `fastembed`'s mutable constraints.
 
 ## Phase 5: Advanced Data Modes & Python Lib
-*Pending...*
+**Status:** In Progress
+**Deliverables:**
+- `ms-ingest/loader`: Native parsers for Wikipedia (`.zim`), PDF, DOCX, JSON, and CSV.
+- Python bindings (`PyO3`) — *Pending...*
 
 ---
 
