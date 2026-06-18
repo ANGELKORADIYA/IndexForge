@@ -70,6 +70,14 @@ This file serves as a central repository for cross-module decisions, architectur
 - `ms-ingest/loader`: Native parsers for Wikipedia (`.zim`), PDF, DOCX, JSON, and CSV.
 - Python bindings (`PyO3` / `maturin`): Built `ms-python` crate exposing a synchronous Python class for indexing and 3-arm searching.
 
+## Phase 6: Advanced Capabilities (LlamaIndex / Typesense parity)
+**Status:** Complete
+**Deliverables:**
+- **AST Code Chunking**: Integrated `tree-sitter` to parse code files into semantic blocks (functions, classes) instead of blindly slicing text.
+- **Token-Aware Chunking**: Integrated `tiktoken-rs` (cl100k_base) to chunk purely by token limits for optimal density.
+- **SymSpell Corrector**: Pure-Rust O(1) dictionary edit-distance spell checker to fix massive query typos before database hits.
+- **LLM Re-ranker**: Alternative to cross-encoder. Feeds top chunks to local LLMs with a strict JSON prompt to intelligently re-sort the candidates.
+
 ---
 
 ## Architectural Rules

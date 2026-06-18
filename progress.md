@@ -45,3 +45,8 @@ Task 2: React Web UI (ui/): complete
 ## Phase 5 (Complete)
 Task 1: Advanced Loaders (Wikipedia ZIM/XML, PDF, DOCX, CSV, JSON): complete
 Task 2: Python Bindings (PyO3): complete
+
+## Phase 6 (Complete)
+Task 1: Advanced Chunking (BPE Tokens & AST `tree-sitter`): complete
+Task 2: Advanced Retrieval (SymSpell Typo Correction): complete
+Task 3: Intelligent Re-ranking (LLM Re-ranker): complete

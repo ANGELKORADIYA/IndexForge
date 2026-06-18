@@ -1413,6 +1413,16 @@ ms-search index enwiki-latest-pages-articles.xml.bz2 --mode wikipedia
 
 ### Codebase tree-sitter setup
 
+## 19. Phase 6 — Advanced Capabilities (Complete)
+
+### Advanced Chunking (LlamaIndex-Style)
+- **TokenChunker**: Uses `tiktoken-rs` (`cl100k_base`) to split text absolutely by token limits (e.g., 512 tokens), preventing density loss.
+- **CodeChunker (AST)**: Integrated `tree-sitter` (Rust, Python, JS). Parses source code into an Abstract Syntax Tree, allowing us to chunk perfectly around semantic boundaries (functions, classes) instead of slicing mid-line.
+
+### Advanced Retrieval & Ranking
+- **SymSpell Corrector**: A pure-Rust O(1) dictionary edit-distance spell checker. It intercepts misspelled queries and calculates Damerau-Levenshtein distances, auto-correcting them before the Fuzzy arm touches the database.
+- **LLM Re-ranker**: An alternative to the Cross-Encoder. Sends the top-20 retrieved chunks directly to the local LLM with a highly constrained prompt, requesting the LLM to reply purely with a JSON array ranking the chunk indices by semantic relevance.
+
 ```toml
 # crates/ms-ingest/Cargo.toml (add tree-sitter grammars)
 [dependencies]
