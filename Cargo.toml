@@ -6,6 +6,7 @@ members = [
     "crates/ms-search",
     "crates/ms-rerank",
     "crates/ms-rag",
+    "crates/ms-server",
     "crates/ms-cli",
 ]
 resolver = "2"

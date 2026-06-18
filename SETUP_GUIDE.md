@@ -181,6 +181,25 @@ You must have the Ollama server running locally with `ollama run llama3.2` to us
 
 ---
 
+## 7. Phase 4: Full-Stack Web UI Setup
+
+### Starting the Axum REST API (`ms-server`)
+The REST API runs on port 8080 by default and serves endpoints for searching and indexing.
+```bash
+cargo run --package ms-server
+```
+
+### Starting the React Frontend (`ui`)
+The frontend is built with React and Vite. It expects the `ms-server` to be running at `localhost:8080`.
+```bash
+cd ui
+npm install
+npm run dev
+```
+Navigate to `http://localhost:5173` to access the MemorySearch web interface.
+
+---
+
 ## 7. Model Download
 
 Embeddings model (`all-MiniLM-L6-v2`, ~86MB ONNX) is downloaded **automatically** on first `index` run by fastembed into `./.fastembed_cache/`.

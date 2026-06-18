@@ -38,9 +38,9 @@ Task 2: RAG Layer with Ollama/OpenRouter/Gemini (ms-rag): complete
   - Implemented `RagPipeline` to construct context prompts using the top-K retrieved chunks.
   - Wired `--rag` flag in `ms-cli`.
 
-## Phase 4 (Pending)
-Task 1: REST API via Axum (ms-server)
-Task 2: React Web UI (ui/)
+## Phase 4 (Complete)
+Task 1: REST API via Axum (ms-server): complete
+Task 2: React Web UI (ui/): complete
 
 ## Phase 5 (Pending)
 Task 1: Advanced Loaders (Wikipedia XML, tree-sitter AST)

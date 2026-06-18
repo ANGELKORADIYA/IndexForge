@@ -58,7 +58,11 @@ This file serves as a central repository for cross-module decisions, architectur
 - **RAG LLM routing:** Automatically routes to the highest-priority API key found in the environment, falling back to local `localhost:11434` (Ollama) to preserve the "100% offline default" rule while allowing easy cloud integration.
 
 ## Phase 4: Full-Stack Web UI
-*Pending...*
+**Status:** Complete
+**Deliverables:**
+- `ms-server`: Axum-based REST API server handling `/api/index` and `/api/search`.
+- `ui`: React + Vite frontend with glassmorphism UI, search filters, and visualization of RAG answers and RRF arm scores.
+- Concurrent model state sharing using `tokio::sync::Mutex` for `fastembed`'s mutable constraints.
 
 ## Phase 5: Advanced Data Modes & Python Lib
 *Pending...*
