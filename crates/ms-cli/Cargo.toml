@@ -8,6 +8,8 @@ ms-core = { path = "../ms-core" }
 ms-ingest = { path = "../ms-ingest" }
 ms-index = { path = "../ms-index" }
 ms-search = { path = "../ms-search" }
+ms-rerank = { path = "../ms-rerank" }
+ms-rag = { path = "../ms-rag" }
 clap = { workspace = true }
 tokio = { workspace = true }
 uuid = { workspace = true }

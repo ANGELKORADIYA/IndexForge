@@ -27,9 +27,16 @@ Task 4: Query Router & RRF Merge: complete
   - ms-cli: new `search-all` subcommand exposes 3-arm merged search
   - Semantic arm failure is non-fatal (warns, falls back to BM25+fuzzy)
 
-## Phase 3 (Pending)
-Task 1: Cross-Encoder Re-ranker (ms-rerank)
-Task 2: RAG Layer with Ollama (ms-rag)
+## Phase 3 (Complete)
+Task 1: Cross-Encoder Re-ranker (ms-rerank): complete
+  - Implemented `ms-rerank` using `fastembed::TextRerank` (`BGERerankerBase` model).
+  - Wired `--rerank` flag in `ms-cli` to re-score the top `2*K` RRF results before truncation.
+
+Task 2: RAG Layer with Ollama/OpenRouter/Gemini (ms-rag): complete
+  - Implemented `LLMProvider` trait with 3 backends: `OllamaProvider`, `OpenRouterProvider`, and `GeminiProvider`.
+  - Configured factory `get_provider()` to automatically select backend based on `.env` variables (`GEMINI_API_KEY` > `OPENROUTER_API_KEY` > Ollama fallback).
+  - Implemented `RagPipeline` to construct context prompts using the top-K retrieved chunks.
+  - Wired `--rag` flag in `ms-cli`.
 
 ## Phase 4 (Pending)
 Task 1: REST API via Axum (ms-server)

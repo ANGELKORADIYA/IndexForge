@@ -109,10 +109,31 @@ cargo run --package ms-cli -- search-all "rust ownership"
 cargo run --package ms-cli -- search-all "machne learnng" --mode notes   # typo tolerant
 ```
 
-Output format:
+### Advanced Search: Cross-Encoder Re-ranking
+
+You can append `--rerank` to pass the RRF results through a Cross-Encoder model (`BGERerankerBase`) for significantly higher accuracy:
+
+```bash
+cargo run --package ms-cli -- search-all "what is ownership?" --rerank
+```
+
+### Retrieval-Augmented Generation (RAG)
+
+You can append `--rag` to pass the top search results to an LLM to generate a natural language answer. By default, it uses a local Ollama instance:
+
+```bash
+cargo run --package ms-cli -- search-all "what is ownership?" --rerank --rag
+```
+
+Output format (Search-All):
 ```
 1. [RRF 0.0328] chunk preview text... | arms: BM25=1.234, Semantic=0.891
 2. [RRF 0.0291] another chunk...      | arms: Fuzzy=0.412, Semantic=0.743
+
+🤖 Generating answer with RAG...
+
+=== RAG Answer (Model: llama3.2) ===
+Ownership is a set of rules that governs how a Rust program manages memory...
 ```
 
 ---
@@ -140,9 +161,27 @@ Output format:
 - Deduplicates across arms, preserves per-arm scores
 - No model needed, ~1ms overhead
 
+## 6. Phase 3: Reranker & RAG Setup
+
+### Cross-Encoder Re-ranker
+When you use the `--rerank` flag, the engine downloads the `BGERerankerBase` ONNX model (~85MB) automatically on the first run. It re-scores the combined results from the 3 arms to provide the most accurate final ranking.
+
+### RAG LLM Providers
+When you use the `--rag` flag, the `ms-rag` layer selects an LLM provider based on your `.env` configuration. It checks in the following priority order:
+
+1. **Gemini (Google API)**: Used if `GEMINI_API_KEY` is set.
+   - Default model: `gemini-1.5-pro-latest`
+2. **OpenRouter (Cloud API)**: Used if `OPENROUTER_API_KEY` is set.
+   - Default model: `meta-llama/llama-3-8b-instruct`
+3. **Ollama (100% Offline)**: Used if no API keys are found.
+   - Default host: `http://localhost:11434`
+   - Default model: `llama3.2`
+
+You must have the Ollama server running locally with `ollama run llama3.2` to use the offline fallback.
+
 ---
 
-## 6. Model Download
+## 7. Model Download
 
 Embeddings model (`all-MiniLM-L6-v2`, ~86MB ONNX) is downloaded **automatically** on first `index` run by fastembed into `./.fastembed_cache/`.
 

@@ -24,3 +24,10 @@ pub struct ScoredCandidate {
     pub score: f64,
     pub arm: SearchArm,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RagAnswer {
+    pub answer: String,
+    pub sources: Vec<SearchResult>,
+    pub model: String,
+}

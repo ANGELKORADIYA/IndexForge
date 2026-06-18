@@ -1,14 +1,8 @@
-pub fn add(left: u64, right: u64) -> u64 {
-    left + right
-}
+pub mod provider;
+pub mod ollama;
+pub mod gemini;
+pub mod openrouter;
+pub mod pipeline;
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
-}
+pub use provider::{LLMProvider, get_provider};
+pub use pipeline::RagPipeline;

@@ -45,7 +45,17 @@ This file serves as a central repository for cross-module decisions, architectur
 - **FuzzyIndex loading:** At search-all time, fuzzy index is built from DB `chunks` table for the queried mode.
 
 ## Phase 3: Re-rankers & RAG Layer
-*Pending...*
+**Status:** Complete
+**Deliverables:**
+- `ms-rerank/src/cross_encoder.rs`: Cross-encoder re-ranker using `fastembed`'s `TextRerank` model (`BGERerankerBase`).
+- `ms-rag/src/provider.rs`: `LLMProvider` trait for abstracting LLM backends.
+- Multiple RAG providers: `OllamaProvider` (default, local), `OpenRouterProvider` (if `OPENROUTER_API_KEY` is present), and `GeminiProvider` (if `GEMINI_API_KEY` is present).
+- `ms-rag/src/pipeline.rs`: Assembles prompts using the top-K chunks and retrieves answers.
+- `ms-cli`: Updated `search-all` command with `--rerank` and `--rag` flags.
+
+**Technical Decisions:**
+- **Re-ranker:** Switched from manually loading `ms-marco` via `ort` to using `fastembed`'s built-in `TextRerank` (`BGERerankerBase`). This simplifies the dependency graph and ensures compatibility.
+- **RAG LLM routing:** Automatically routes to the highest-priority API key found in the environment, falling back to local `localhost:11434` (Ollama) to preserve the "100% offline default" rule while allowing easy cloud integration.
 
 ## Phase 4: Full-Stack Web UI
 *Pending...*

@@ -6,7 +6,6 @@ members = [
     "crates/ms-search",
     "crates/ms-rerank",
     "crates/ms-rag",
-    "crates/ms-server",
     "crates/ms-cli",
 ]
 resolver = "2"
@@ -18,7 +17,7 @@ serde_json  = "1"
 sqlx        = { version = "0.7", features = ["postgres", "uuid", "runtime-tokio-native-tls"] }
 tantivy     = "0.21"
 fastembed   = "5"
-uuid        = { version = "1", features = ["v4"] }
+uuid        = { version = "1", features = ["v4", "serde"] }
 axum        = "0.7"
 clap        = { version = "4", features = ["derive"] }
 tracing     = "0.1"

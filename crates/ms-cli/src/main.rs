@@ -42,6 +42,10 @@ enum Commands {
         mode: String,
         #[arg(short, long, default_value_t = 10)]
         top_k: usize,
+        #[arg(long, default_value_t = false)]
+        rerank: bool,
+        #[arg(long, default_value_t = false)]
+        rag: bool,
     },
 }
 
@@ -157,7 +161,7 @@ async fn main() -> anyhow::Result<()> {
             }
         }
 
-        Commands::SearchAll { query, mode, top_k } => {
+        Commands::SearchAll { query, mode, top_k, rerank, rag } => {
             // Build BM25 index
             let schema = build_schema();
             let index  = tantivy::Index::open_in_dir(&index_path)?;
@@ -175,26 +179,44 @@ async fn main() -> anyhow::Result<()> {
             }
 
             // Run all 3 arms
+            let k_search = if *rerank { (*top_k) * 2 } else { *top_k };
             println!("🔍 Running 3-arm search for \"{}\" (mode: {})...", query, mode);
-            let results = ms_search::router::search(
-                query, mode, *top_k,
+            let mut results = ms_search::router::search(
+                query, mode, k_search,
                 &bm25, &fuzzy, &mut embedder, &pool,
             ).await?;
+
+            if *rerank {
+                println!("🧠 Re-ranking top {} results with Cross-Encoder...", results.len());
+                let mut cross_encoder = ms_rerank::CrossEncoder::new()?;
+                results = cross_encoder.rerank(query, results)?;
+                results.truncate(*top_k);
+            }
 
             if results.is_empty() {
                 println!("No results found.");
             } else {
-                println!("=== Top {} results (BM25 + Fuzzy + Semantic, RRF merged) ===", results.len());
+                let title = if *rerank { "Top results (Cross-Encoder Re-ranked)" } else { "Top results (BM25 + Fuzzy + Semantic, RRF merged)" };
+                println!("=== {} ===", title);
                 for (i, res) in results.iter().enumerate() {
                     let arm_info: Vec<String> = res.arm_scores
                         .iter()
                         .map(|(arm, s)| format!("{:?}={:.3}", arm, s))
                         .collect();
                     println!(
-                        "{}. [RRF {:.4}] {} | arms: {}",
-                        i + 1, res.score, res.text,
+                        "{}. [{:.4}] {} | arms: {}",
+                        i + 1, res.score, res.text.chars().take(120).collect::<String>(),
                         arm_info.join(", ")
                     );
+                }
+
+                if *rag {
+                    println!("\n🤖 Generating answer with RAG...");
+                    let provider = ms_rag::get_provider()?;
+                    let pipeline = ms_rag::RagPipeline::new(provider);
+                    let top_k_for_rag = std::cmp::min(results.len(), 5);
+                    let answer = pipeline.answer(query, &results[..top_k_for_rag]).await?;
+                    println!("\n=== RAG Answer (Model: {}) ===\n{}", answer.model, answer.answer);
                 }
             }
         }
