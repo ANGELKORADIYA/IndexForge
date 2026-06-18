@@ -28,7 +28,21 @@ This file serves as a central repository for cross-module decisions, architectur
 
 
 ## Phase 2: Fuzzy & Semantic Search Arms
-*Pending...*
+**Status:** Complete
+**Deliverables:**
+- `ms-index/src/vector.rs`: pgvector HNSW semantic search (cosine distance via `<=>` operator).
+- `ms-index/src/fuzzy.rs`: Pure-Rust trigram fuzzy index (character n-grams + Jaccard similarity).
+- `ms-search/src/router.rs`: 3-arm parallel query router using `tokio::join!`.
+- `ms-search/src/merge.rs`: RRF (Reciprocal Rank Fusion) merge with k=60.
+- `ms-cli`: New `search-all` command wiring all 3 arms + RRF.
+
+**Technical Decisions:**
+- **Fuzzy Arm:** Pure-Rust character trigrams (no symspell). Space-padded trigrams handle boundary matching. 1-char typo only invalidates 3/N trigrams, giving natural tolerance.
+- **Vector Arm:** Delegates to pgvector HNSW `<=>` cosine distance. Score = `1 - distance`.
+- **RRF Constant k=60:** Standard value from original Cormack et al. paper. Stable performance across arm count.
+- **Semantic failure is non-fatal:** If pgvector query fails, BM25+fuzzy results are returned without error.
+- **fastembed 5.x:** Upgraded from 3.x. Uses `TextInitOptions` builder API. `embed()` now takes `&mut self`.
+- **FuzzyIndex loading:** At search-all time, fuzzy index is built from DB `chunks` table for the queried mode.
 
 ## Phase 3: Re-rankers & RAG Layer
 *Pending...*

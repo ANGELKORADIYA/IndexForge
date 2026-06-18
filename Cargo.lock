@@ -1972,7 +1972,12 @@ dependencies = [
 name = "ms-index"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
+ "pgvector",
+ "sqlx",
  "tantivy",
+ "tokio",
+ "uuid",
 ]
 
 [[package]]
@@ -1996,8 +2001,13 @@ version = "0.1.0"
 name = "ms-search"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "ms-core",
  "ms-index",
+ "ms-ingest",
+ "sqlx",
+ "tokio",
+ "uuid",
 ]
 
 [[package]]

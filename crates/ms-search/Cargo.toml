@@ -4,5 +4,10 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-ms-core = { path = "../ms-core" }
+ms-core  = { path = "../ms-core" }
 ms-index = { path = "../ms-index" }
+ms-ingest = { path = "../ms-ingest" }
+sqlx     = { version = "0.7", features = ["postgres", "uuid", "runtime-tokio-native-tls"] }
+tokio    = { workspace = true }
+anyhow   = { workspace = true }
+uuid     = { workspace = true }
