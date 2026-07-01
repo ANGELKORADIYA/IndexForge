@@ -16,9 +16,16 @@ interface RagAnswer {
   model: string;
 }
 
+interface PerArmResults {
+  bm25: SearchResult[];
+  fuzzy: SearchResult[];
+  semantic: SearchResult[];
+}
+
 interface SearchResponse {
   results: SearchResult[];
   rag_answer?: RagAnswer;
+  arm_results?: PerArmResults;
 }
 
 interface Stats {
@@ -34,9 +41,12 @@ function App() {
   const [topK, setTopK] = useState(10);
   const [rerank, setRerank] = useState(false);
   const [rag, setRag] = useState(false);
+  const [arms, setArms] = useState(false);
+  const [activeTab, setActiveTab] = useState<'merged' | 'bm25' | 'fuzzy' | 'semantic'>('merged');
   
   const [results, setResults] = useState<SearchResult[]>([]);
   const [ragAnswer, setRagAnswer] = useState<RagAnswer | undefined>(undefined);
+  const [armResults, setArmResults] = useState<PerArmResults | undefined>(undefined);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -66,6 +76,7 @@ function App() {
     setError(null);
     setResults([]);
     setRagAnswer(undefined);
+    setArmResults(undefined);
 
     try {
       const params = new URLSearchParams({
@@ -74,6 +85,7 @@ function App() {
         top_k: topK.toString(),
         rerank: rerank.toString(),
         rag: rag.toString(),
+        arms: arms.toString(),
       });
 
       const response = await fetch(`http://localhost:8080/api/search?${params}`);
@@ -84,6 +96,8 @@ function App() {
       const data: SearchResponse = await response.json();
       setResults(data.results);
       setRagAnswer(data.rag_answer);
+      setArmResults(data.arm_results);
+      setActiveTab('merged');
     } catch (err: any) {
       setError(err.message || 'Failed to search');
     } finally {
@@ -228,6 +242,15 @@ function App() {
               />
               Enable RAG (LLM Generation)
             </label>
+
+            <label className="toggle-label">
+              <input
+                type="checkbox"
+                checked={arms}
+                onChange={(e) => setArms(e.target.checked)}
+              />
+              Show Individual Arm Results
+            </label>
           </div>
         </form>
 
@@ -243,31 +266,70 @@ function App() {
           </div>
         )}
 
+        {armResults && (
+          <div style={{ display: 'flex', gap: '10px', margin: '20px 0', borderBottom: '2px solid rgba(255,255,255,0.1)', paddingBottom: '10px', flexWrap: 'wrap' }}>
+            <button
+              onClick={() => setActiveTab('merged')}
+              style={{ padding: '8px 16px', borderRadius: '8px', border: 'none', background: activeTab === 'merged' ? '#6366f1' : '#1e293b', color: '#fff', cursor: 'pointer', fontWeight: 600 }}
+            >
+              🏆 {rerank ? 'Unique Re-ranked Results' : 'Merged Results'} ({results.length})
+            </button>
+            <button
+              onClick={() => setActiveTab('bm25')}
+              style={{ padding: '8px 16px', borderRadius: '8px', border: 'none', background: activeTab === 'bm25' ? '#3b82f6' : '#1e293b', color: '#fff', cursor: 'pointer', fontWeight: 600 }}
+            >
+              📝 BM25 Top ({armResults.bm25.length})
+            </button>
+            <button
+              onClick={() => setActiveTab('fuzzy')}
+              style={{ padding: '8px 16px', borderRadius: '8px', border: 'none', background: activeTab === 'fuzzy' ? '#f59e0b' : '#1e293b', color: '#fff', cursor: 'pointer', fontWeight: 600 }}
+            >
+              🔤 Fuzzy Top ({armResults.fuzzy.length})
+            </button>
+            <button
+              onClick={() => setActiveTab('semantic')}
+              style={{ padding: '8px 16px', borderRadius: '8px', border: 'none', background: activeTab === 'semantic' ? '#10b981' : '#1e293b', color: '#fff', cursor: 'pointer', fontWeight: 600 }}
+            >
+              🧠 Semantic Top ({armResults.semantic.length})
+            </button>
+          </div>
+        )}
+
         <div className="results-container">
-          {results.map((result, idx) => (
-            <div key={result.chunk_id || idx} className="result-card fade-in" style={{ animationDelay: `${idx * 0.05}s` }}>
-              <div className="result-header">
-                <span className="result-rank">#{idx + 1}</span>
-                <span className="result-score">Score: {result.score.toFixed(4)}</span>
-              </div>
-              
-              <div className="result-arms">
-                {Object.entries(result.arm_scores).map(([arm, score]) => (
-                  <span key={arm} className={`arm-badge arm-${arm.toLowerCase()}`}>
-                    {arm}: {(score as number).toFixed(3)}
-                  </span>
+          {(() => {
+            const displayedResults = activeTab === 'merged' ? results :
+                                     activeTab === 'bm25' && armResults ? armResults.bm25 :
+                                     activeTab === 'fuzzy' && armResults ? armResults.fuzzy :
+                                     activeTab === 'semantic' && armResults ? armResults.semantic : results;
+            return (
+              <>
+                {displayedResults.map((result, idx) => (
+                  <div key={result.chunk_id || idx} className="result-card fade-in" style={{ animationDelay: `${idx * 0.05}s` }}>
+                    <div className="result-header">
+                      <span className="result-rank">#{idx + 1}</span>
+                      <span className="result-score">Score: {result.score.toFixed(4)}</span>
+                    </div>
+                    
+                    <div className="result-arms">
+                      {Object.entries(result.arm_scores).map(([arm, score]) => (
+                        <span key={arm} className={`arm-badge arm-${arm.toLowerCase()}`}>
+                          {arm}: {(score as number).toFixed(3)}
+                        </span>
+                      ))}
+                    </div>
+
+                    <div className="result-text">
+                      {result.text}
+                    </div>
+                  </div>
                 ))}
-              </div>
 
-              <div className="result-text">
-                {result.text}
-              </div>
-            </div>
-          ))}
-
-          {!isLoading && !error && query && results.length === 0 && (
-            <div className="no-results">No results found for "{query}".</div>
-          )}
+                {!isLoading && !error && query && displayedResults.length === 0 && (
+                  <div className="no-results">No results found for "{query}".</div>
+                )}
+              </>
+            );
+          })()}
         </div>
       </main>
     </div>

@@ -31,3 +31,11 @@ pub struct RagAnswer {
     pub sources: Vec<SearchResult>,
     pub model: String,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct PerArmResults {
+    pub bm25: Vec<SearchResult>,
+    pub fuzzy: Vec<SearchResult>,
+    pub semantic: Vec<SearchResult>,
+}
+

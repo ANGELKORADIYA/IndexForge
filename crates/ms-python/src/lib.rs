@@ -98,7 +98,7 @@ impl MemorySearch {
         })
     }
 
-    #[pyo3(signature = (query, mode="default".to_string(), top_k=10, rerank=false, rag=false))]
+    #[pyo3(signature = (query, mode="default".to_string(), top_k=10, rerank=false, rag=false, arms=false))]
     fn search(
         &self,
         query: String,
@@ -106,6 +106,7 @@ impl MemorySearch {
         top_k: usize,
         rerank: bool,
         rag: bool,
+        arms: bool,
     ) -> PyResult<String> {
         self.rt.block_on(async {
             let pool = PgPoolOptions::new().connect(&self.db_url).await
@@ -116,17 +117,42 @@ impl MemorySearch {
             let schema = build_schema();
             let index = tantivy::Index::open_in_dir(&self.tantivy_path).unwrap();
             let reader = index.reader().unwrap();
-            
-            let mut results = router::route_query(
-                &query, &mode, &pool, &reader, &schema, &mut embedder
+            let bm25 = ms_index::bm25::BM25Index { index, schema, reader };
+
+            let mut fuzzy = ms_index::fuzzy::FuzzyIndex::new();
+            let rows = sqlx::query!("SELECT id::text, text FROM chunks WHERE mode = $1", mode)
+                .fetch_all(&pool)
+                .await
+                .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+            for row in rows {
+                fuzzy.add(row.id.unwrap_or_default(), row.text);
+            }
+
+            let k_search = if rerank && arms { top_k * 5 } else if rerank { top_k * 2 } else { top_k };
+            let (mut results, arm_results) = router::search_with_arms(
+                &query, &mode, k_search, &bm25, &fuzzy, &mut embedder, &pool, arms, top_k
             ).await.map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
 
             if let Some(ce) = &mut cross_encoder {
-                results = ms_rerank::rerank(&query, results, ce).unwrap();
+                if let Some(ref arms_data) = arm_results {
+                    let mut shown_ids = std::collections::HashSet::new();
+                    for r in &arms_data.bm25 { shown_ids.insert(r.chunk_id.clone()); }
+                    for r in &arms_data.fuzzy { shown_ids.insert(r.chunk_id.clone()); }
+                    for r in &arms_data.semantic { shown_ids.insert(r.chunk_id.clone()); }
+                    results.retain(|r| !shown_ids.contains(&r.chunk_id));
+                }
+                results = ce.rerank(&query, results).unwrap();
+                results.truncate(top_k);
             }
 
-            results.truncate(top_k);
-            let json_results = serde_json::to_string_pretty(&results).unwrap();
+            let json_results = if arms {
+                serde_json::to_string_pretty(&serde_json::json!({
+                    "results": results,
+                    "arm_results": arm_results
+                })).unwrap()
+            } else {
+                serde_json::to_string_pretty(&results).unwrap()
+            };
             
             Ok(json_results)
         })

@@ -14,6 +14,8 @@ pub struct SearchQuery {
     pub rerank: bool,
     #[serde(default)]
     pub rag: bool,
+    #[serde(default, alias = "show_arm_results")]
+    pub arms: bool,
 }
 
 fn default_top_k() -> usize {
@@ -25,6 +27,8 @@ pub struct SearchResponse {
     pub results: Vec<SearchResult>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub rag_answer: Option<RagAnswer>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub arm_results: Option<ms_core::PerArmResults>,
 }
 
 pub async fn search_handler(
@@ -50,10 +54,10 @@ pub async fn search_handler(
         fuzzy.add(row.id.unwrap_or_default(), row.text);
     }
 
-    let k_search = if query.rerank { query.top_k * 2 } else { query.top_k };
+    let k_search = if query.rerank && query.arms { query.top_k * 5 } else if query.rerank { query.top_k * 2 } else { query.top_k };
     let mut embedder = state.embedder.lock().await;
 
-    let mut results = ms_search::router::search(
+    let (mut results, arm_results) = ms_search::router::search_with_arms(
         &query.q,
         &query.mode,
         k_search,
@@ -61,11 +65,20 @@ pub async fn search_handler(
         &fuzzy,
         &mut *embedder,
         &state.pool,
+        query.arms,
+        query.top_k,
     ).await.map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, format!("Search error: {}", e)))?;
 
     drop(embedder);
 
     if query.rerank {
+        if let Some(ref arms) = arm_results {
+            let mut shown_ids = std::collections::HashSet::new();
+            for r in &arms.bm25 { shown_ids.insert(r.chunk_id.clone()); }
+            for r in &arms.fuzzy { shown_ids.insert(r.chunk_id.clone()); }
+            for r in &arms.semantic { shown_ids.insert(r.chunk_id.clone()); }
+            results.retain(|r| !shown_ids.contains(&r.chunk_id));
+        }
         let mut reranker = state.cross_encoder.lock().await;
         results = reranker.rerank(&query.q, results)
             .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, format!("Rerank error: {}", e)))?;
@@ -86,5 +99,6 @@ pub async fn search_handler(
     Ok(Json(SearchResponse {
         results,
         rag_answer,
+        arm_results,
     }))
 }

@@ -51,24 +51,26 @@ This file serves as a central repository for cross-module decisions, architectur
 - `ms-rag/src/provider.rs`: `LLMProvider` trait for abstracting LLM backends.
 - Multiple RAG providers: `OllamaProvider` (default, local), `OpenRouterProvider` (if `OPENROUTER_API_KEY` is present), and `GeminiProvider` (if `GEMINI_API_KEY` is present).
 - `ms-rag/src/pipeline.rs`: Assembles prompts using the top-K chunks and retrieves answers.
-- `ms-cli`: Updated `search-all` command with `--rerank` and `--rag` flags.
+- `ms-cli`: Updated `search-all` command with `--rerank`, `--rag`, and `--arms` (`--show-arm-results`) flags.
+- **Per-Arm Retrieval & Non-Overlapping Reranking**: When `show_arm_results` is enabled alongside `rerank`, individual top candidates from each search arm (`BM25`, `Fuzzy`, `Semantic`) are captured and displayed independently. The reranker filters out any items already shown in these individual arm lists before scoring the remaining pool, producing unique top reranked results without overlap.
 
 **Technical Decisions:**
 - **Re-ranker:** Switched from manually loading `ms-marco` via `ort` to using `fastembed`'s built-in `TextRerank` (`BGERerankerBase`). This simplifies the dependency graph and ensures compatibility.
+- **Non-Overlapping Candidate Filtering:** When `--rerank` and `--arms` are combined, candidate pooling expands (`top_k * 5`) and items already listed in the per-arm top K lists are excluded prior to cross-encoder evaluation to guarantee distinct findings across sections.
 - **RAG LLM routing:** Automatically routes to the highest-priority API key found in the environment, falling back to local `localhost:11434` (Ollama) to preserve the "100% offline default" rule while allowing easy cloud integration.
 
 ## Phase 4: Full-Stack Web UI
 **Status:** Complete
 **Deliverables:**
-- `ms-server`: Axum-based REST API server handling `/api/index` and `/api/search`.
-- `ui`: React + Vite frontend with glassmorphism UI, search filters, and visualization of RAG answers and RRF arm scores.
+- `ms-server`: Axum-based REST API server handling `/api/index` and `/api/search` (supporting optional `arms=true` parameter).
+- `ui`: React + Vite frontend with glassmorphism UI, search filters, interactive tabs for per-arm search result inspection (`Merged/Re-ranked`, `BM25 Top`, `Fuzzy Top`, `Semantic Top`), and visualization of RAG answers and RRF arm scores.
 - Concurrent model state sharing using `tokio::sync::Mutex` for `fastembed`'s mutable constraints.
 
 ## Phase 5: Advanced Data Modes & Python Lib
 **Status:** Complete
 **Deliverables:**
 - `ms-ingest/loader`: Native parsers for Wikipedia (`.zim`), PDF, DOCX, JSON, and CSV.
-- Python bindings (`PyO3` / `maturin`): Built `ms-python` crate exposing a synchronous Python class for indexing and 3-arm searching.
+- Python bindings (`PyO3` / `maturin`): Built `ms-python` crate exposing a synchronous Python class for indexing and 3-arm searching with optional `arms=True` inspection.
 
 ## Phase 6: Advanced Capabilities (LlamaIndex / Typesense parity)
 **Status:** Complete
@@ -77,6 +79,16 @@ This file serves as a central repository for cross-module decisions, architectur
 - **Token-Aware Chunking**: Integrated `tiktoken-rs` (cl100k_base) to chunk purely by token limits for optimal density.
 - **SymSpell Corrector**: Pure-Rust O(1) dictionary edit-distance spell checker to fix massive query typos before database hits.
 - **LLM Re-ranker**: Alternative to cross-encoder. Feeds top chunks to local LLMs with a strict JSON prompt to intelligently re-sort the candidates.
+
+---
+
+## Open-Source Architectural Inspirations
+MemorySearch synthesizes the best design patterns from foundational open-source AI and search projects into a single 100% offline Rust engine:
+1. **LlamaIndex (`llama_index`)**: Taught us the best chunking strategies (sentence-aware splitting, token-window overlap, and code-aware AST chunking). We mimic its `SimpleNodeParser` natively in Rust within `ms-ingest`.
+2. **FAISS (`faiss`)**: Gave us the ANN (Approximate Nearest Neighbor) playbook. We leverage HNSW graph indexing for high-recall sub-millisecond vector retrieval across millions of chunks using `pgvector` HNSW and `faiss-rs` bindings.
+3. **AnythingLLM (`anything-llm`)**: Reference for local multi-modal RAG retrieval. Showed us how to execute parallel queries across multiple search arms (keyword, vector, fuzzy) and merge them cleanly into mode-aware context.
+4. **Typesense (`typesense`)**: Gold standard for unified BM25 + fuzzy searching. We mimic its dual-retrieval power using pure-Rust Tantivy (Lucene-inspired BM25) combined with space-padded character n-gram indexes and SymSpell typo tolerance.
+5. **OpenWebUI (`open-webui`)**: Showed how to make advanced RAG controls accessible. We borrow its UX pattern directly by exposing real-time re-ranker and LLM provider selection cleanly in our web interface and CLI.
 
 ---
 

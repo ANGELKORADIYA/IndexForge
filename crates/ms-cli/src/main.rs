@@ -11,6 +11,23 @@ use sqlx::postgres::PgPoolOptions;
 use pgvector::Vector;
 use dotenvy::dotenv;
 
+fn clean_preview(text: &str, _max_chars: usize) -> String {
+    let mut cleaned = String::with_capacity(text.len());
+    let mut last_space = false;
+    for c in text.chars() {
+        if c.is_control() || c.is_whitespace() {
+            if !last_space {
+                cleaned.push(' ');
+                last_space = true;
+            }
+        } else {
+            cleaned.push(c);
+            last_space = false;
+        }
+    }
+    cleaned.trim().to_string()
+}
+
 #[derive(Parser)]
 #[command(name = "ms-cli")]
 #[command(about = "MemorySearch CLI — index and search your local data", long_about = None)]
@@ -34,6 +51,8 @@ enum Commands {
         mode: String,
         #[arg(short, long, default_value_t = 10)]
         top_k: usize,
+        #[arg(long, default_missing_value = "all", num_args = 0..=1, alias = "show-arm-results")]
+        arms: Option<String>,
     },
     /// Search using all 3 arms in parallel (BM25 + Fuzzy + Semantic) with RRF merge
     SearchAll {
@@ -46,6 +65,8 @@ enum Commands {
         rerank: bool,
         #[arg(long, default_value_t = false)]
         rag: bool,
+        #[arg(long, default_missing_value = "all", num_args = 0..=1, alias = "show-arm-results")]
+        arms: Option<String>,
     },
 }
 
@@ -148,7 +169,7 @@ async fn main() -> anyhow::Result<()> {
             println!("✅ Indexed {total_docs} documents, {total_chunks} chunks into mode='{mode}'.");
         }
 
-        Commands::Search { query, mode, top_k } => {
+        Commands::Search { query, mode, top_k, arms } => {
             let schema = build_schema();
             let index  = tantivy::Index::open_in_dir(&index_path)?;
             let reader = index.reader()?;
@@ -158,14 +179,27 @@ async fn main() -> anyhow::Result<()> {
             if results.is_empty() {
                 println!("No results found.");
             } else {
-                println!("=== BM25 Results for \"{}\" (mode: {}) ===", query, mode);
-                for (i, res) in results.iter().enumerate() {
-                    println!("{}. [BM25 {:.4}] {}", i + 1, res.score, res.text);
+                if arms.is_some() {
+                    println!("\n\x1b[1;36m┌─────────────────────────────────────────────────────────────────────────────┐\x1b[0m");
+                    println!("\x1b[1;36m│ 📝 ARM 1: BM25 (Exact Keyword Match) — Top {} Results                        │\x1b[0m", results.len());
+                    println!("\x1b[1;36m└─────────────────────────────────────────────────────────────────────────────┘\x1b[0m");
+                    for (i, res) in results.iter().enumerate() {
+                        let preview = clean_preview(&res.text, 140);
+                        println!("  \x1b[1;36m#{:02}\x1b[0m │ ID: \x1b[1m{}\x1b[0m │ Score: \x1b[1;36m{:.4}\x1b[0m", i + 1, &res.chunk_id[..8], res.score);
+                        println!("      └─ \"{}\"\n", preview);
+                    }
+                } else {
+                    println!("=== BM25 Results for \"{}\" (mode: {}) ===", query, mode);
+                    for (i, res) in results.iter().enumerate() {
+                        let preview = clean_preview(&res.text, 140);
+                        println!("  #{:02} │ ID: {} │ Score: {:.4}", i + 1, &res.chunk_id[..8], res.score);
+                        println!("      └─ \"{}\"\n", preview);
+                    }
                 }
             }
         }
 
-        Commands::SearchAll { query, mode, top_k, rerank, rag } => {
+        Commands::SearchAll { query, mode, top_k, rerank, rag, arms } => {
             // Build BM25 index
             let schema = build_schema();
             let index  = tantivy::Index::open_in_dir(&index_path)?;
@@ -183,15 +217,61 @@ async fn main() -> anyhow::Result<()> {
             }
 
             // Run all 3 arms
-            let k_search = if *rerank { (*top_k) * 2 } else { *top_k };
+            let show_arms = arms.is_some();
+            let arm_filter = arms.as_deref().unwrap_or("all").to_lowercase();
+            let show_all = arm_filter == "all" || arm_filter == "true" || arm_filter == "yes" || arm_filter.is_empty();
+
+            let k_search = if *rerank && show_arms { (*top_k) * 5 } else if *rerank { (*top_k) * 2 } else { *top_k };
             println!("🔍 Running 3-arm search for \"{}\" (mode: {})...", query, mode);
-            let mut results = ms_search::router::search(
+            let (mut results, arm_results) = ms_search::router::search_with_arms(
                 query, mode, k_search,
-                &bm25, &fuzzy, &mut embedder, &pool,
+                &bm25, &fuzzy, &mut embedder, &pool, show_arms, *top_k,
             ).await?;
 
+            if let Some(ref arms_data) = arm_results {
+                if show_all || arm_filter == "bm25" {
+                    println!("\n\x1b[1;36m┌─────────────────────────────────────────────────────────────────────────────┐\x1b[0m");
+                    println!("\x1b[1;36m│ 📝 ARM 1: BM25 (Exact Keyword Match) — Top {} Results                        │\x1b[0m", arms_data.bm25.len());
+                    println!("\x1b[1;36m└─────────────────────────────────────────────────────────────────────────────┘\x1b[0m");
+                    for (i, res) in arms_data.bm25.iter().enumerate() {
+                        let preview = clean_preview(&res.text, 140);
+                        println!("  \x1b[1;36m#{:02}\x1b[0m │ ID: \x1b[1m{}\x1b[0m │ Score: \x1b[1;36m{:.4}\x1b[0m", i + 1, &res.chunk_id[..8], res.score);
+                        println!("      └─ \"{}\"\n", preview);
+                    }
+                }
+
+                if show_all || arm_filter == "fuzzy" {
+                    println!("\n\x1b[1;33m┌─────────────────────────────────────────────────────────────────────────────┐\x1b[0m");
+                    println!("\x1b[1;33m│ 🔤 ARM 2: Fuzzy (Trigram Typo-Tolerant) — Top {} Results                     │\x1b[0m", arms_data.fuzzy.len());
+                    println!("\x1b[1;33m└─────────────────────────────────────────────────────────────────────────────┘\x1b[0m");
+                    for (i, res) in arms_data.fuzzy.iter().enumerate() {
+                        let preview = clean_preview(&res.text, 140);
+                        println!("  \x1b[1;33m#{:02}\x1b[0m │ ID: \x1b[1m{}\x1b[0m │ Score: \x1b[1;33m{:.4}\x1b[0m", i + 1, &res.chunk_id[..8], res.score);
+                        println!("      └─ \"{}\"\n", preview);
+                    }
+                }
+
+                if show_all || arm_filter == "semantic" {
+                    println!("\n\x1b[1;32m┌─────────────────────────────────────────────────────────────────────────────┐\x1b[0m");
+                    println!("\x1b[1;32m│ 🧠 ARM 3: Semantic (Vector Embedding) — Top {} Results                      │\x1b[0m", arms_data.semantic.len());
+                    println!("\x1b[1;32m└─────────────────────────────────────────────────────────────────────────────┘\x1b[0m");
+                    for (i, res) in arms_data.semantic.iter().enumerate() {
+                        let preview = clean_preview(&res.text, 140);
+                        println!("  \x1b[1;32m#{:02}\x1b[0m │ ID: \x1b[1m{}\x1b[0m │ Score: \x1b[1;32m{:.4}\x1b[0m", i + 1, &res.chunk_id[..8], res.score);
+                        println!("      └─ \"{}\"\n", preview);
+                    }
+                }
+            }
+
             if *rerank {
-                println!("🧠 Re-ranking top {} results with Cross-Encoder...", results.len());
+                if let Some(ref arms_data) = arm_results {
+                    let mut shown_ids = std::collections::HashSet::new();
+                    for r in &arms_data.bm25 { shown_ids.insert(r.chunk_id.clone()); }
+                    for r in &arms_data.fuzzy { shown_ids.insert(r.chunk_id.clone()); }
+                    for r in &arms_data.semantic { shown_ids.insert(r.chunk_id.clone()); }
+                    results.retain(|r| !shown_ids.contains(&r.chunk_id));
+                }
+                println!("🧠 Re-ranking top {} unique remaining candidates with Cross-Encoder...", results.len());
                 let mut cross_encoder = ms_rerank::CrossEncoder::new()?;
                 results = cross_encoder.rerank(query, results)?;
                 results.truncate(*top_k);
@@ -200,18 +280,27 @@ async fn main() -> anyhow::Result<()> {
             if results.is_empty() {
                 println!("No results found.");
             } else {
-                let title = if *rerank { "Top results (Cross-Encoder Re-ranked)" } else { "Top results (BM25 + Fuzzy + Semantic, RRF merged)" };
-                println!("=== {} ===", title);
+                let title = if *rerank && show_arms {
+                    "🏆 FINAL RESULTS: Cross-Encoder Re-ranked (Unique candidates not overlapping)"
+                } else if *rerank {
+                    "🏆 FINAL RESULTS: Cross-Encoder Re-ranked"
+                } else {
+                    "🏆 FINAL RESULTS: BM25 + Fuzzy + Semantic (RRF Merged)"
+                };
+                println!("\x1b[1;35m┌───────────────────────────────────────────────────────────────────────────────────────────┐\x1b[0m");
+                println!("\x1b[1;35m│ {}\x1b[0m", title);
+                println!("\x1b[1;35m└───────────────────────────────────────────────────────────────────────────────────────────┘\x1b[0m");
                 for (i, res) in results.iter().enumerate() {
                     let arm_info: Vec<String> = res.arm_scores
                         .iter()
                         .map(|(arm, s)| format!("{:?}={:.3}", arm, s))
                         .collect();
+                    let preview = clean_preview(&res.text, 160);
                     println!(
-                        "{}. [{:.4}] {} | arms: {}",
-                        i + 1, res.score, res.text.chars().take(120).collect::<String>(),
-                        arm_info.join(", ")
+                        "  \x1b[1;35m#{:02}\x1b[0m │ ID: \x1b[1m{}\x1b[0m │ Score: \x1b[1;35m{:.4}\x1b[0m │ Arms: {}",
+                        i + 1, &res.chunk_id[..8], res.score, arm_info.join(", ")
                     );
+                    println!("      └─ \"{}\"\n", preview);
                 }
 
                 if *rag {

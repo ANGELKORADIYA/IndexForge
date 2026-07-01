@@ -117,6 +117,14 @@ You can append `--rerank` to pass the RRF results through a Cross-Encoder model 
 cargo run --package ms-cli -- search-all "what is ownership?" --rerank
 ```
 
+### Inspecting Individual Search Arms (`--arms`) & Non-Overlapping Re-ranking
+
+You can append `--arms` (or `--show-arm-results`) to view the top candidates retrieved by each individual search arm (`BM25`, `Fuzzy`, `Semantic`) before merging. When combined with `--rerank`, any candidates displayed in the individual arms' top results are excluded before cross-encoder re-ranking, ensuring the re-ranked top results are 100% unique without overlapping the per-arm top lists:
+
+```bash
+cargo run --package ms-cli -- search-all "what is ownership?" --arms --rerank
+```
+
 ### Retrieval-Augmented Generation (RAG)
 
 You can append `--rag` to pass the top search results to an LLM to generate a natural language answer. By default, it uses a local Ollama instance:
@@ -125,18 +133,25 @@ You can append `--rag` to pass the top search results to an LLM to generate a na
 cargo run --package ms-cli -- search-all "what is ownership?" --rerank --rag
 ```
 
-Output format (Search-All):
+Output format (Search-All with `--arms`):
 ```
-1. [RRF 0.0328] chunk preview text... | arms: BM25=1.234, Semantic=0.891
-2. [RRF 0.0291] another chunk...      | arms: Fuzzy=0.412, Semantic=0.743
+=================== INDIVIDUAL ARM RESULTS ===================
+--- BM25 Top 10 ---
+  1. [14.2310] Ownership is a set of rules...
+--- Fuzzy Top 10 ---
+  1. [0.4512] Ownership is a set of rules...
+--- Semantic Top 10 ---
+  1. [0.8912] Memory safety without garbage collection...
+==============================================================
 
-🤖 Generating answer with RAG...
-
-=== RAG Answer (Model: llama3.2) ===
-Ownership is a set of rules that governs how a Rust program manages memory...
+🧠 Re-ranking top unique results with Cross-Encoder...
+=== Top results (Cross-Encoder Re-ranked) ===
+1. [0.9842] References allow you to refer to some value without taking ownership... | arms: Semantic=0.812
+2. [0.9120] Slice type is another data type that does not have ownership...           | arms: BM25=8.412
 ```
 
 ---
+
 
 ## 5. How Each Search Arm Works
 
@@ -288,6 +303,13 @@ import json
 ms = memory_search.MemorySearch()
 ms.index("./data", mode="wikipedia")
 
-results = ms.search("How does vector search work?", top_k=3, rerank=True)
-print(json.loads(results))
+# Perform a 3-arm search with non-overlapping Cross-Encoder re-ranking and inspect per-arm results
+response_json = ms.search("How does vector search work?", top_k=3, rerank=True, arms=True)
+data = json.loads(response_json)
+
+print("Merged / Re-ranked unique results:", len(data["results"]))
+print("BM25 top results:", len(data["arm_results"]["bm25"]))
+print("Fuzzy top results:", len(data["arm_results"]["fuzzy"]))
+print("Semantic top results:", len(data["arm_results"]["semantic"]))
 ```
+
